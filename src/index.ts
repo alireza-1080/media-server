@@ -4,7 +4,7 @@ import { connectDB } from "./services/prisma.service.js";
 
 configDotenv();
 
-connectDB()
+connectDB();
 
 const port = process.env.PORT;
 
