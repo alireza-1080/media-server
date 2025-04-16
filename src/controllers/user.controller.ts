@@ -20,7 +20,28 @@ const createUser = async (req: Request<object, object, CreateUpdateRequestBody>,
     })
 
     if (existingUser) {
-      res.json({ user: existingUser })
+    const updatedUser =  await prisma.user.update({
+        where: {
+          clerkId,
+        },
+        data: {
+          email,
+          username,
+          name,
+          image,
+        },
+        include: {
+          _count: {
+            select: {
+              followers: true,
+              followings: true,
+              posts: true,
+            }
+          }
+        }
+      })
+
+      res.json({ user: updatedUser })
       return
     }
 
@@ -32,13 +53,30 @@ const createUser = async (req: Request<object, object, CreateUpdateRequestBody>,
         name,
         image,
       },
+      include: {
+        _count: {
+          select: {
+            followers: true,
+            followings: true,
+            posts: true
+          }
+        }
+      }
     })
+
+    if (!newUser) {
+      throw new Error('Something unexpected happened during login/signup process')
+    }
 
     res.json({ user: newUser })
   } catch (error) {
     if (error instanceof Error) {
-      console.log(error.message)
+      res.status(400).json({ error: error.message })
+      return
     }
+    console.log((error as Error).message)
+    res.status(400).json({ error: 'Check the server console for more info about the error' })
+    return
   }
 }
 
