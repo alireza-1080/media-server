@@ -1,14 +1,17 @@
-import { Request, Response } from 'express'
-import prisma from '../services/prisma.service.js'
+import { Request, Response } from "express";
+import prisma from "../services/prisma.service.js";
 
 type createPostRequestBodyType = {
-  authorId: string
-  content: string
-  image: string
-}
+  authorId: string;
+  content: string;
+  image: string;
+};
 
-const createPost = async (req: Request<object, object, createPostRequestBodyType>, res: Response) => {
-  const { authorId, content, image } = req.body
+const createPost = async (
+  req: Request<object, object, createPostRequestBodyType>,
+  res: Response,
+) => {
+  const { authorId, content, image } = req.body;
   try {
     await prisma.post.create({
       data: {
@@ -16,14 +19,14 @@ const createPost = async (req: Request<object, object, createPostRequestBodyType
         content,
         image,
       },
-    })
+    });
 
-    res.json({ message: 'Post created successfully' })
+    res.json({ message: "Post created successfully" });
   } catch (error) {
     if (error instanceof Error) {
-      res.status(400).json({ error: error.message })
+      res.status(400).json({ error: error.message });
     }
   }
-}
+};
 
-export { createPost }
+export { createPost };
