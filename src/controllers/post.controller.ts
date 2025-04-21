@@ -84,7 +84,7 @@ type ToggleLikeRequestBodyType = {
 const toggleLike = async (req: Request<object, object, ToggleLikeRequestBodyType>, res: Response) => {
   try {
     const { postId, userId: clerkId } = req.body
-   
+
     if (!postId) {
       throw new Error('Post id is not provided')
     }
@@ -95,11 +95,11 @@ const toggleLike = async (req: Request<object, object, ToggleLikeRequestBodyType
 
     const user = await prisma.user.findUnique({
       where: {
-        clerkId
+        clerkId,
       },
       select: {
         id: true,
-      }
+      },
     })
 
     const userId = user?.id
@@ -116,6 +116,10 @@ const toggleLike = async (req: Request<object, object, ToggleLikeRequestBodyType
 
     if (!post) {
       throw new Error("Post doesn't exists")
+    }
+
+    if (!userId) {
+      throw new Error('User id is not provided')
     }
 
     // ! Check if the like already exists?
@@ -138,7 +142,8 @@ const toggleLike = async (req: Request<object, object, ToggleLikeRequestBodyType
         },
       })
 
-      return res.json({ message: 'Like removed Successfully' })
+      res.json({ message: 'Like removed Successfully' })
+      return
     }
 
     await prisma.$transaction([
@@ -162,10 +167,117 @@ const toggleLike = async (req: Request<object, object, ToggleLikeRequestBodyType
         : []),
     ])
 
-    return res.json({message: "Like created successfully"})
+    res.json({ message: 'Like created successfully' })
+    return
   } catch {
-    return res.status(400).json({error: "Failed to toggle the like"})
+    res.status(400).json({ error: 'Failed to toggle the like' })
+    return
   }
 }
 
-export { createPost, getAllPosts, toggleLike }
+interface CreateCommentRequestBody {
+  postId: string
+  content: string
+  userId: string
+}
+
+const createComment = async (req: Request<object, object, CreateCommentRequestBody>, res: Response) => {
+  try {
+    const { postId, content, userId } = req.body
+
+    // ! Check if the post exists and get the author id to create notification
+    const post = await prisma.post.findUnique({
+      where: {
+        id: postId,
+      },
+      select: {
+        authorId: true,
+      },
+    })
+
+    if (!post) {
+      throw new Error("Post doesn't exist.")
+    }
+
+    const { authorId } = post
+
+    await prisma.$transaction([
+      prisma.comment.create({
+        data: {
+          content: content,
+          authorId: userId,
+          postId: postId,
+        },
+      }),
+      prisma.notification.create({
+        data: {
+          type: 'COMMENT',
+          postId,
+          creatorId: userId,
+          userId: authorId,
+        },
+      }),
+    ])
+
+    res.json({ message: `Comment created successfully.` })
+    return
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message })
+    return
+  }
+}
+
+interface DeletePostRequestBody {
+  postId: string
+  userId: string
+}
+
+const deletePost = async (req: Request<object, object, DeletePostRequestBody>, res: Response) => {
+  try {
+    const { postId, userId } = req.body
+
+    //! Check if the post exists and get the authorId
+    const post = await prisma.post.findUnique({
+      where: {
+        id: postId,
+      },
+      select: {
+        authorId: true,
+      },
+    })
+
+    if (!post) throw new Error("Post doesn't exists")
+
+    const { authorId } = post
+
+    //! Check if the user is eligible to delete the post
+    if (userId !== authorId) throw new Error('You are not authorized to delete the post')
+
+    await prisma.$transaction([
+      prisma.like.deleteMany({
+        where: {
+          postId,
+        },
+      }),
+      prisma.comment.deleteMany({
+        where: {
+          postId,
+        },
+      }),
+      prisma.post.delete({
+        where: {
+          id: postId,
+        },
+      }),
+    ])
+
+    res.json({ message: `Post deleted successfully.` })
+    return
+  } catch (error) {
+    console.log(error)
+    res.status(400).json({ error: (error as Error).message })
+    return
+  }
+}
+
+export { createPost, getAllPosts, toggleLike, createComment, deletePost }
