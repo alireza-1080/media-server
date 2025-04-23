@@ -3,7 +3,7 @@ import helmet from "helmet";
 import cors from "cors";
 import userRouter from "./routes/user.route.js";
 import postRouter from "./routes/post.route.js";
-
+import notificationRouter from "routes/notification.route.js";
 const app = express();
 
 app.use(helmet());
@@ -18,5 +18,7 @@ app.get("/", (req, res) => {
 app.use("/user", userRouter);
 
 app.use("/post", postRouter);
+
+app.use("/notification", notificationRouter);
 
 export default app;
