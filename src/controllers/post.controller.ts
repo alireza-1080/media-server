@@ -70,7 +70,7 @@ const getAllPosts = async (req: Request, res: Response) => {
       },
     })
 
-    res.json({ posts })
+    res.json({ posts: posts.reverse() })
   } catch {
     res.status(400).json({ error: 'Error occurred during fetching posts' })
   }
