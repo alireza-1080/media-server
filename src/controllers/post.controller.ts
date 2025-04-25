@@ -399,7 +399,7 @@ const getPostsByUserName = async (req: Request<object, object, GetPostsByUsernam
     if (error instanceof Error) {
       // Handle known validation errors
       if (error.message === 'Clerk ID is required' || error.message === 'User not found') {
-        res.status(400).json({ error: error.message })
+        res.status(400).json({ error: error.message, posts: [] })
         return
       }
     }
@@ -441,7 +441,7 @@ const getLikedPostsByUserName = async (
 ) => {
   try {
     const { username } = req.body
-
+    console.log(username)
     if (!username) throw new Error('Username is required')
 
     const user = await prisma.user.findUnique({
@@ -513,7 +513,7 @@ const getLikedPostsByUserName = async (
       const clientErrors = ['Username is required', 'User not found']
 
       if (clientErrors.includes(error.message)) {
-        res.status(400).json({ error: error.message })
+        res.status(400).json({ error: error.message, posts: [] })
         return
       }
     }

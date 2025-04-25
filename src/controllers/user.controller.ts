@@ -106,6 +106,85 @@ const createUser = async (req: Request<object, object, CreateUpdateRequestBody>,
   }
 }
 
+interface UpdateUserByFormDataRequestBody {
+  userId: string
+  name: string
+  bio: string
+  location: string
+  website: string
+}
+
+const updateUserByFormData = async (req: Request<object, object, UpdateUserByFormDataRequestBody>, res: Response) => {
+  try {
+    const { userId, name } = req.body
+    const { bio = '', location = '', website = '' } = req.body
+
+    if (!userId) {
+      throw new Error('UserId is required')
+    }
+
+    if (!name) {
+      throw new Error('Name is required')
+    }
+
+    await prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        name,
+        bio,
+        location,
+        website,
+      },
+    })
+
+    res.json({ message: 'User updated successfully' })
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      // Handle known validation errors
+      const clientErrors = ['UserId is required', 'Name is required']
+
+      if (clientErrors.includes(error.message)) {
+        res.status(400).json({ error: error.message })
+        return
+      }
+    }
+
+    const err = error as { constructor: { name: string }; message: string }
+
+    // Handle Prisma specific errors
+    if (err.constructor.name === 'PrismaClientKnownRequestError') {
+      if (err.message.includes('Record to update not found')) {
+        res.status(404).json({
+          error: 'User not found',
+        })
+        return
+      }
+
+      res.status(400).json({
+        error: 'Invalid request parameters',
+        details: err.message,
+      })
+      return
+    }
+
+    if (err.constructor.name === 'PrismaClientValidationError') {
+      res.status(422).json({
+        error: 'Invalid data format',
+        details: err.message,
+      })
+      return
+    }
+
+    // Log and handle unexpected errors
+    console.error('Unexpected error in updateUserByFormData:', err)
+    res.status(500).json({
+      error: 'An unexpected error occurred while updating user',
+    })
+  }
+}
+
 interface GetRandomUsersRequestBody {
   clerkId: string
   count: number
@@ -274,6 +353,93 @@ const followUser = async (req: Request<object, object, FollowUserRequestBodyType
   }
 }
 
+interface UnfollowUserRequestBody {
+  followerId: string
+  followingId: string
+}
+
+const unfollowUser = async (req: Request<object, object, UnfollowUserRequestBody>, res: Response) => {
+  try {
+    const { followerId, followingId } = req.body
+    
+    if (!followerId) {
+      throw new Error('FollowerId is required')
+    }
+
+    if (!followingId) {
+      throw new Error('FollowingId is required')
+    }
+
+    if (followerId === followingId) {
+      throw new Error('You cannot unfollow yourself')
+    }
+
+    const doesFollowExists = await prisma.follow.findUnique({
+      where: {
+        followerId_followingId: {
+          followerId,
+          followingId,
+        },
+      },
+    })
+
+    if (!doesFollowExists) {
+      throw new Error('You are not following this user')
+    }
+
+    await prisma.follow.delete({
+      where: {
+        followerId_followingId: {
+          followerId,
+          followingId,
+        },
+      },
+    })
+
+    res.json({ message: 'Unfollowed successfully' })
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      // Handle known validation errors
+      const clientErrors = [
+        'FollowerId is required',
+        'FollowingId is required',
+        'You cannot unfollow yourself',
+        'You are not following this user',
+      ]
+
+      if (clientErrors.includes(error.message)) {
+        res.status(400).json({ error: error.message })
+        return
+      }
+    }
+
+    const err = error as { constructor: { name: string }; message: string }
+
+    // Handle Prisma specific errors
+    if (err.constructor.name === 'PrismaClientKnownRequestError') {
+      res.status(400).json({
+        error: 'Invalid request parameters',
+        details: err.message,
+      })
+      return
+    }
+
+    if (err.constructor.name === 'PrismaClientValidationError') {
+      res.status(422).json({
+        error: 'Invalid data format',
+        details: err.message,
+      })
+      return
+    }
+
+    // Log and handle unexpected errors
+    console.error('Unexpected error in unfollowUser:', err)
+    res.status(500).json({
+      error: 'An unexpected error occurred while unfollowing user',
+    })
+  }
+}
+
 interface GetUserByUsernameRequestBody {
   username: string
 }
@@ -362,7 +528,7 @@ const isCurrentUserFollowing = async (
 ) => {
   try {
     const { profileOwnerUsername, visitorClerkId } = req.body
-    
+
     if (!profileOwnerUsername) throw new Error('Profile owner username is required')
     if (!visitorClerkId) throw new Error('Visitor clerk id is required')
 
@@ -374,7 +540,7 @@ const isCurrentUserFollowing = async (
         id: true,
       },
     })
-    
+
     if (!profileOwner) throw new Error('Profile owner not found')
 
     const { id: profileOwnerId } = profileOwner
@@ -391,7 +557,7 @@ const isCurrentUserFollowing = async (
     if (!visitor) throw new Error('Visitor not found')
 
     const { id: visitorId } = visitor
-    
+
     const isFollowing = await prisma.follow.findUnique({
       where: {
         followerId_followingId: {
@@ -446,4 +612,12 @@ const isCurrentUserFollowing = async (
   }
 }
 
-export { createUser, getRandomUsers, followUser, getUserByUsername, isCurrentUserFollowing }
+export {
+  createUser,
+  getRandomUsers,
+  followUser,
+  getUserByUsername,
+  isCurrentUserFollowing,
+  unfollowUser,
+  updateUserByFormData,
+}
