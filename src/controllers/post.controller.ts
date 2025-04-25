@@ -1,7 +1,7 @@
 import { Request, Response } from 'express'
 import prisma from '../services/prisma.service.js'
 
-type createPostRequestBodyType = {
+interface createPostRequestBodyType {
   authorId: string
   content: string
   image: string
@@ -76,7 +76,7 @@ const getAllPosts = async (req: Request, res: Response) => {
   }
 }
 
-type ToggleLikeRequestBodyType = {
+interface ToggleLikeRequestBodyType {
   postId: string
   userId: string | undefined
 }
@@ -169,8 +169,9 @@ const toggleLike = async (req: Request<object, object, ToggleLikeRequestBodyType
 
     res.json({ message: 'Like created successfully' })
     return
-  } catch {
-    res.status(400).json({ error: 'Failed to toggle the like' })
+  } catch (error) {
+    console.error('Error in toggleLike:', error)
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to toggle the like' })
     return
   }
 }
@@ -184,6 +185,10 @@ interface CreateCommentRequestBody {
 const createComment = async (req: Request<object, object, CreateCommentRequestBody>, res: Response) => {
   try {
     const { postId, content, userId } = req.body
+
+    if (!postId) {
+      throw new Error('Post ID is required for comments')
+    }
 
     // ! Check if the post exists and get the author id to create notification
     const post = await prisma.post.findUnique({
@@ -201,28 +206,31 @@ const createComment = async (req: Request<object, object, CreateCommentRequestBo
 
     const { authorId } = post
 
-    await prisma.$transaction([
-      prisma.comment.create({
-        data: {
-          content: content,
-          authorId: userId,
-          postId: postId,
-        },
-      }),
-      prisma.notification.create({
-        data: {
-          type: 'COMMENT',
-          postId,
-          creatorId: userId,
-          userId: authorId,
-        },
-      }),
-    ])
+    // Create comment first
+    const comment = await prisma.comment.create({
+      data: {
+        content: content,
+        authorId: userId,
+        postId: postId,
+      },
+    })
+
+    // Create notification with the comment ID
+    await prisma.notification.create({
+      data: {
+        type: 'COMMENT',
+        postId,
+        creatorId: userId,
+        userId: authorId,
+        commentId: comment.id,
+      },
+    })
 
     res.json({ message: `Comment created successfully.` })
     return
   } catch (error) {
-    res.status(400).json({ error: (error as Error).message })
+    console.error('Error in createComment:', error)
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to create comment' })
     return
   }
 }
@@ -280,4 +288,106 @@ const deletePost = async (req: Request<object, object, DeletePostRequestBody>, r
   }
 }
 
-export { createPost, getAllPosts, toggleLike, createComment, deletePost }
+interface GetPostsByUsernameRequestBody {
+  username: string
+}
+
+const getPostsByUserName = async (req: Request<object, object, GetPostsByUsernameRequestBody>, res: Response) => {
+  try {
+    const { username } = req.body
+    
+    if (!username) throw new Error('Clerk ID is required')
+
+    const user = await prisma.user.findUnique({
+      where: {
+        username,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!user) throw new Error('User not found')
+
+    const { id: userId } = user
+    
+    const posts = await prisma.post.findMany({
+      where: {
+        authorId: userId,
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            username: true,
+          },
+        },
+        comments: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                username: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+        likes: {
+          select: {
+            userId: true,
+          },
+        },
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+          },
+        },
+      },
+    })
+
+    res.json({ posts })
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      // Handle known validation errors
+      if (error.message === 'Clerk ID is required' || error.message === 'User not found') {
+        res.status(400).json({ error: error.message })
+        return
+      }
+    }
+
+    const err = error as { constructor: { name: string }; message: string }
+
+    // Handle Prisma specific errors
+    if (err.constructor.name === 'PrismaClientKnownRequestError') {
+      res.status(400).json({
+        error: 'Invalid request parameters',
+        details: err.message,
+      })
+      return
+    }
+
+    if (err.constructor.name === 'PrismaClientValidationError') {
+      res.status(422).json({
+        error: 'Invalid data format',
+        details: err.message,
+      })
+      return
+    }
+
+    // Log and handle unexpected errors
+    console.error('Unexpected error in getPostByClerkId:', err)
+    res.status(500).json({
+      error: 'An unexpected error occurred while fetching posts',
+    })
+  }
+}
+
+export { createPost, getAllPosts, toggleLike, createComment, deletePost, getPostsByUserName }
