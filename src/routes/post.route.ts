@@ -1,5 +1,5 @@
 import express from 'express'
-import { createPost, getAllPosts, toggleLike, createComment, deletePost, getPostsByUserName } from '../controllers/post.controller.js'
+import { createPost, getAllPosts, toggleLike, createComment, deletePost, getPostsByUserName, getLikedPostsByUserName } from '../controllers/post.controller.js'
 
 const router = express.Router()
 
@@ -14,5 +14,7 @@ router.post('/create-comment', createComment)
 router.post('/delete-post', deletePost)
 
 router.post('/get-posts-by-username', getPostsByUserName)
+
+router.post('/get-liked-posts-by-username', getLikedPostsByUserName)
 
 export default router

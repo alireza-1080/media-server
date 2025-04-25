@@ -1,7 +1,7 @@
 import { Request, Response } from 'express'
 import prisma from '../services/prisma.service.js'
 
-type CreateUpdateRequestBody = {
+interface CreateUpdateRequestBody {
   clerkId: string
   username: string
   email: string
@@ -351,4 +351,99 @@ const getUserByUsername = async (req: Request<object, object, GetUserByUsernameR
   }
 }
 
-export { createUser, getRandomUsers, followUser, getUserByUsername }
+interface IsCurrentUserFollowingRequestBody {
+  profileOwnerUsername: string
+  visitorClerkId: string
+}
+
+const isCurrentUserFollowing = async (
+  req: Request<object, object, IsCurrentUserFollowingRequestBody>,
+  res: Response
+) => {
+  try {
+    const { profileOwnerUsername, visitorClerkId } = req.body
+    
+    if (!profileOwnerUsername) throw new Error('Profile owner username is required')
+    if (!visitorClerkId) throw new Error('Visitor clerk id is required')
+
+    const profileOwner = await prisma.user.findUnique({
+      where: {
+        username: profileOwnerUsername,
+      },
+      select: {
+        id: true,
+      },
+    })
+    
+    if (!profileOwner) throw new Error('Profile owner not found')
+
+    const { id: profileOwnerId } = profileOwner
+
+    const visitor = await prisma.user.findUnique({
+      where: {
+        clerkId: visitorClerkId,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!visitor) throw new Error('Visitor not found')
+
+    const { id: visitorId } = visitor
+    
+    const isFollowing = await prisma.follow.findUnique({
+      where: {
+        followerId_followingId: {
+          followerId: visitorId,
+          followingId: profileOwnerId,
+        },
+      },
+    })
+
+    res.json({ isFollowing: Boolean(isFollowing) })
+    return
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      // Handle known validation errors
+      const clientErrors = [
+        'Profile owner username is required',
+        'Visitor clerk id is required',
+        'Profile owner not found',
+        'Visitor not found',
+      ]
+
+      if (clientErrors.includes(error.message)) {
+        res.status(400).json({ error: error.message })
+        return
+      }
+    }
+
+    const err = error as { constructor: { name: string }; message: string }
+
+    // Handle Prisma specific errors
+    if (err.constructor.name === 'PrismaClientKnownRequestError') {
+      res.status(400).json({
+        error: 'Invalid request parameters',
+        details: err.message,
+      })
+      return
+    }
+
+    if (err.constructor.name === 'PrismaClientValidationError') {
+      res.status(422).json({
+        error: 'Invalid data format',
+        details: err.message,
+      })
+      return
+    }
+
+    // Log and handle unexpected errors
+    console.error('Unexpected error in isCurrentUserFollowing:', err)
+    res.status(500).json({
+      error: 'An unexpected error occurred while checking follow status',
+    })
+  }
+}
+
+export { createUser, getRandomUsers, followUser, getUserByUsername, isCurrentUserFollowing }

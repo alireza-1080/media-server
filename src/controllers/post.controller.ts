@@ -281,10 +281,51 @@ const deletePost = async (req: Request<object, object, DeletePostRequestBody>, r
 
     res.json({ message: `Post deleted successfully.` })
     return
-  } catch (error) {
-    console.log(error)
-    res.status(400).json({ error: (error as Error).message })
-    return
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      // Handle known validation and authorization errors
+      const clientErrors = ["Post doesn't exists", 'You are not authorized to delete the post']
+
+      if (clientErrors.includes(error.message)) {
+        res.status(403).json({ error: error.message })
+        return
+      }
+    }
+
+    const err = error as { constructor: { name: string }; message: string }
+
+    // Handle Prisma specific errors
+    if (err.constructor.name === 'PrismaClientKnownRequestError') {
+      // Handle unique constraint violations or foreign key errors
+      res.status(400).json({
+        error: 'Invalid request parameters',
+        details: err.message,
+      })
+      return
+    }
+
+    if (err.constructor.name === 'PrismaClientValidationError') {
+      res.status(422).json({
+        error: 'Invalid data format',
+        details: err.message,
+      })
+      return
+    }
+
+    // Log and handle transaction errors
+    if (err.constructor.name === 'PrismaClientUnknownRequestError') {
+      console.error('Transaction error in deletePost:', err)
+      res.status(500).json({
+        error: 'Failed to delete post and its associated data',
+      })
+      return
+    }
+
+    // Log and handle unexpected errors
+    console.error('Unexpected error in deletePost:', err)
+    res.status(500).json({
+      error: 'An unexpected error occurred while deleting the post',
+    })
   }
 }
 
@@ -295,7 +336,7 @@ interface GetPostsByUsernameRequestBody {
 const getPostsByUserName = async (req: Request<object, object, GetPostsByUsernameRequestBody>, res: Response) => {
   try {
     const { username } = req.body
-    
+
     if (!username) throw new Error('Clerk ID is required')
 
     const user = await prisma.user.findUnique({
@@ -310,7 +351,7 @@ const getPostsByUserName = async (req: Request<object, object, GetPostsByUsernam
     if (!user) throw new Error('User not found')
 
     const { id: userId } = user
-    
+
     const posts = await prisma.post.findMany({
       where: {
         authorId: userId,
@@ -390,4 +431,118 @@ const getPostsByUserName = async (req: Request<object, object, GetPostsByUsernam
   }
 }
 
-export { createPost, getAllPosts, toggleLike, createComment, deletePost, getPostsByUserName }
+interface GetLikedPostsByUsernameRequestBody {
+  username: string
+}
+
+const getLikedPostsByUserName = async (
+  req: Request<object, object, GetLikedPostsByUsernameRequestBody>,
+  res: Response
+) => {
+  try {
+    const { username } = req.body
+
+    if (!username) throw new Error('Username is required')
+
+    const user = await prisma.user.findUnique({
+      where: {
+        username,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!user) throw new Error('User not found')
+
+    const { id: userId } = user
+
+    const likedPosts = await prisma.post.findMany({
+      where: {
+        likes: {
+          some: {
+            userId,
+          },
+        },
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            image: true,
+          },
+        },
+        comments: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+                image: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+        likes: {
+          select: {
+            userId: true,
+          },
+        },
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    })
+
+    res.json({ posts: likedPosts })
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      // Handle known validation errors
+      const clientErrors = ['Username is required', 'User not found']
+
+      if (clientErrors.includes(error.message)) {
+        res.status(400).json({ error: error.message })
+        return
+      }
+    }
+
+    const err = error as { constructor: { name: string }; message: string }
+
+    // Handle Prisma specific errors
+    if (err.constructor.name === 'PrismaClientKnownRequestError') {
+      res.status(400).json({
+        error: 'Invalid request parameters',
+        details: err.message,
+      })
+      return
+    }
+
+    if (err.constructor.name === 'PrismaClientValidationError') {
+      res.status(422).json({
+        error: 'Invalid data format',
+        details: err.message,
+      })
+      return
+    }
+
+    // Log and handle unexpected errors
+    console.error('Unexpected error in getLikedPostsByUserName:', err)
+    res.status(500).json({
+      error: 'An unexpected error occurred while fetching liked posts',
+    })
+  }
+}
+
+export { createPost, getAllPosts, toggleLike, createComment, deletePost, getPostsByUserName, getLikedPostsByUserName }
