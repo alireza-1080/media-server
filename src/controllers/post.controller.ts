@@ -5,16 +5,18 @@ interface createPostRequestBodyType {
   authorId: string
   content: string
   image: string
+  fileKey: string
 }
 
 const createPost = async (req: Request<object, object, createPostRequestBodyType>, res: Response) => {
-  const { authorId, content, image } = req.body
+  const { authorId, content, image, fileKey } = req.body
   try {
     await prisma.post.create({
       data: {
         authorId,
         content,
         image,
+        fileKey,
       },
     })
 
@@ -261,7 +263,7 @@ const deletePost = async (req: Request<object, object, DeletePostRequestBody>, r
     //! Check if the user is eligible to delete the post
     if (userId !== authorId) throw new Error('You are not authorized to delete the post')
 
-    await prisma.$transaction([
+    const [, , deletedPost] = await prisma.$transaction([
       prisma.like.deleteMany({
         where: {
           postId,
@@ -279,7 +281,7 @@ const deletePost = async (req: Request<object, object, DeletePostRequestBody>, r
       }),
     ])
 
-    res.json({ message: `Post deleted successfully.` })
+    res.json({ message: `Post deleted successfully.`, deletedPost })
     return
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -441,7 +443,7 @@ const getLikedPostsByUserName = async (
 ) => {
   try {
     const { username } = req.body
-    console.log(username)
+
     if (!username) throw new Error('Username is required')
 
     const user = await prisma.user.findUnique({

@@ -36,6 +36,7 @@ model Post {
   authorId  String   @db.ObjectId
   content   String
   image     String
+  fileKey   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
