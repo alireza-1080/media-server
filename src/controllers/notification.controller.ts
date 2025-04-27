@@ -1,13 +1,16 @@
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
-import { Request, Response } from 'express'
-import prisma from 'services/prisma.service.js'
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { Request, Response } from "express";
+import prisma from "services/prisma.service.js";
 
 interface getAllNotificationsRequestBody {
-  clerkId: string
+  clerkId: string;
 }
 
-const getAllNotifications = async (req: Request<object, object, getAllNotificationsRequestBody>, res: Response) => {
-  const { clerkId } = req.body
+const getAllNotifications = async (
+  req: Request<object, object, getAllNotificationsRequestBody>,
+  res: Response,
+) => {
+  const { clerkId } = req.body;
 
   try {
     //! check if the user exists
@@ -18,13 +21,13 @@ const getAllNotifications = async (req: Request<object, object, getAllNotificati
       select: {
         id: true,
       },
-    })
+    });
 
     if (!user) {
-      throw new Error('User not found')
+      throw new Error("User not found");
     }
 
-    const userId = user.id
+    const userId = user.id;
 
     const notifications = await prisma.notification.findMany({
       where: {
@@ -55,28 +58,31 @@ const getAllNotifications = async (req: Request<object, object, getAllNotificati
         },
       },
       orderBy: {
-        createdAt: 'desc',
+        createdAt: "desc",
       },
-    })
+    });
 
-    res.json({ notifications })
+    res.json({ notifications });
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {
-      res.status(400).json({ error: error.message })
-      return
+      res.status(400).json({ error: error.message });
+      return;
     } else if (error instanceof Error) {
-      res.status(400).json({ error: error.message })
-      return
+      res.status(400).json({ error: error.message });
+      return;
     }
   }
-}
+};
 
 interface markAsReadRequestBody {
-  notificationsIds: string[]
+  notificationsIds: string[];
 }
 
-const markAsRead = async (req: Request<object, object, markAsReadRequestBody>, res: Response) => {
-  const { notificationsIds } = req.body
+const markAsRead = async (
+  req: Request<object, object, markAsReadRequestBody>,
+  res: Response,
+) => {
+  const { notificationsIds } = req.body;
 
   try {
     await prisma.notification.updateMany({
@@ -86,19 +92,19 @@ const markAsRead = async (req: Request<object, object, markAsReadRequestBody>, r
       data: {
         read: true,
       },
-    })
+    });
 
-    res.json({ message: 'Notifications marked as read' })
-    return
+    res.json({ message: "Notifications marked as read" });
+    return;
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {
-      res.status(400).json({ error: error.message })
-      return
+      res.status(400).json({ error: error.message });
+      return;
     } else if (error instanceof Error) {
-      res.status(400).json({ error: error.message })
-      return
+      res.status(400).json({ error: error.message });
+      return;
     }
   }
-}
+};
 
-export { getAllNotifications, markAsRead }
+export { getAllNotifications, markAsRead };
