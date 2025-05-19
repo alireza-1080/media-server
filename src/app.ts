@@ -20,6 +20,11 @@ app.use((err: unknown, req: express.Request, res: express.Response, next: expres
   next(err)
 })
 
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy' })
+})
+
 app.get('/', (req, res) => {
   res.json('Server is 🏃‍♂️‍➡️🏃‍♂️‍➡️🏃‍♂️‍➡️')
 })
